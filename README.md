@@ -1,4 +1,4 @@
-Voici la version sans emojis, propre et professionnelle :
+
 
 ---
 
@@ -60,4 +60,3 @@ Follow the instructions displayed in the console.
 
 ---
 
-Si tu veux une version plus concise pour un portfolio GitHub, je peux aussi te la simplifier.
