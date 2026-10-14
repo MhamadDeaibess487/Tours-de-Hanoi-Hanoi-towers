@@ -9,6 +9,7 @@ A Python puzzle game with a desktop interface, a console mode and an animated re
 ## Features
 
 - Three towers and 1–10 disks, with validated moves and victory detection.
+- Dark interface, hover states and alternating ranking rows with highlighted best scores.
 - Mouse and keyboard controls, move counter and successive undo.
 - Free play and challenge mode: at most `2ⁿ − 1 + 5` moves.
 - Recursive solution animation with pause, resume, stop and adjustable delay.

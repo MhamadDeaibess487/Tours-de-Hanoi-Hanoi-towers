@@ -1,10 +1,11 @@
 """Event-driven Tkinter interface with a scalable Canvas."""
 
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, simpledialog
 from .game import Game
 from .scores import ScoreStore
 from .solver import solve
+from .theme import apply_dark_theme, BACKGROUND, SURFACE
 
 
 class App:
@@ -19,13 +20,7 @@ class App:
         self.paused = False
         self.recorded = False
         root.title("Tours de Hanoï")
-        style = ttk.Style(root)
-        style.theme_use("clam")
-        style.configure("TButton", padding=(8, 6))
-        style.configure("TFrame", background="#f1f5f9")
-        style.configure("TLabel", background="#f1f5f9")
-        style.configure("TCheckbutton", background="#f1f5f9")
-        root.configure(background="#f1f5f9")
+        apply_dark_theme(root)
         root.geometry("1000x650")
         root.minsize(700, 450)
         root.protocol("WM_DELETE_WINDOW", self.close)
@@ -50,8 +45,13 @@ class App:
             ("Arrêter", self.stop),
             ("Scores", self.scores),
         ]:
-            ttk.Button(tools, text=text, command=command).pack(side="left", padx=3)
-        ttk.Label(root, textvariable=self.counter, padding=10).pack()
+            ttk.Button(
+                tools,
+                text=text,
+                command=command,
+                style="Primary.TButton" if text == "Nouvelle partie" else "TButton",
+            ).pack(side="left", padx=3)
+        ttk.Label(root, textvariable=self.counter, padding=10, style="Counter.TLabel").pack()
         self.canvas = tk.Canvas(root, background="#101827", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True, padx=12)
         self.canvas.bind("<Configure>", lambda event: self.draw())
@@ -65,7 +65,10 @@ class App:
         ttk.Label(footer, text="Délai (ms)").pack(side="right")
         ttk.Scale(footer, from_=50, to=1000, variable=self.delay).pack(side="right")
         ttk.Label(
-            root, text="Clavier : 1, 2, 3 pour les tours · Échap pour désélectionner", padding=(0, 0, 0, 8)
+            root,
+            text="Clavier : 1, 2, 3 pour les tours · Échap pour désélectionner",
+            padding=(0, 0, 0, 8),
+            style="Muted.TLabel",
         ).pack()
         self.draw()
 
@@ -123,7 +126,7 @@ class App:
                             self.store.add(name, self.game)
                             self.recorded = True
                         except (ValueError, OSError) as error:
-                            messagebox.showerror("Score non enregistré", str(error), parent=self.root)
+                            self.show_error("Score non enregistré", str(error))
             elif self.game.exhausted:
                 self.status.set("Limite du défi atteinte. Annulez ou commencez une nouvelle partie.")
         self.draw()
@@ -235,22 +238,55 @@ class App:
         try:
             rows = self.store.ranking()
         except (ValueError, OSError) as error:
-            messagebox.showerror("Scores", str(error), parent=self.root)
+            self.show_error("Scores", str(error))
             return
         window = tk.Toplevel(self.root)
         window.title("Classement")
-        table = ttk.Treeview(window, columns=("disks", "name", "moves", "date"), show="headings")
+        window.configure(background=BACKGROUND)
+        window.geometry("740x420")
+        window.minsize(600, 300)
+        heading = ttk.Frame(window, padding=16)
+        heading.pack(fill="x")
+        ttk.Label(heading, text="CLASSEMENT", font=("TkDefaultFont", 16, "bold")).pack(anchor="w")
+        ttk.Label(
+            heading, text="Par nombre de disques, puis par nombre de coups · Dates UTC", style="Muted.TLabel"
+        ).pack(anchor="w", pady=(6, 0))
+        body = ttk.Frame(window, padding=(16, 0, 16, 16))
+        body.pack(fill="both", expand=True)
+        table = ttk.Treeview(body, columns=("disks", "name", "moves", "date"), show="headings")
         for column, title in [("disks", "Disques"), ("name", "Joueur"), ("moves", "Coups"), ("date", "Date UTC")]:
             table.heading(column, text=title)
             table.column(column, width=160)
-        scroll = ttk.Scrollbar(window, orient="vertical", command=table.yview)
+        scroll = ttk.Scrollbar(body, orient="vertical", command=table.yview)
         table.configure(yscrollcommand=scroll.set)
         table.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
-        for row in rows:
-            table.insert("", "end", values=(row["disks"], row["name"], row["moves"], row["date"][:10]))
+        table.tag_configure("even", background=BACKGROUND)
+        table.tag_configure("odd", background=SURFACE)
+        table.tag_configure("best", foreground="#7dd3fc")
+        best = {}
+        for index, row in enumerate(rows):
+            best.setdefault(row["disks"], row["moves"])
+            tags = ["even" if index % 2 == 0 else "odd"]
+            if row["moves"] == best[row["disks"]]:
+                tags.append("best")
+            table.insert("", "end", values=(row["disks"], row["name"], row["moves"], row["date"][:10]), tags=tags)
         if not rows:
             table.insert("", "end", values=("", "Aucun score enregistré", "", ""))
+
+    def show_error(self, title, message):
+        window = tk.Toplevel(self.root)
+        window.title(title)
+        window.configure(background=BACKGROUND)
+        window.transient(self.root)
+        frame = ttk.Frame(window, padding=20)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text=title, foreground="#fda4af", font=("TkDefaultFont", 12, "bold")).pack(anchor="w")
+        ttk.Label(frame, text=message, wraplength=450).pack(anchor="w", pady=12)
+        button = ttk.Button(frame, text="Fermer", command=window.destroy)
+        button.pack(anchor="e")
+        button.focus_set()
+        window.bind("<Escape>", lambda event: window.destroy())
 
     def close(self):
         if self.job:

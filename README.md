@@ -9,6 +9,7 @@ Un jeu de réflexion en Python avec une interface de bureau, un mode terminal et
 ## Fonctionnalités
 
 - Trois tours et 1 à 10 disques, avec validation de chaque mouvement.
+- Interface sombre, boutons avec états au survol et classement à lignes alternées.
 - Contrôle à la souris ou au clavier, compteur et détection de victoire.
 - Annulation successive des déplacements.
 - Mode libre et mode défi : au maximum `2ⁿ − 1 + 5` coups.
