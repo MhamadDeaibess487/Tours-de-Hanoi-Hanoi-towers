@@ -12,7 +12,7 @@ A Python puzzle game with a desktop interface, a console mode and an animated re
 - Dark interface, hover states and alternating ranking rows with highlighted best scores.
 - Mouse and keyboard controls, move counter and successive undo.
 - Free play and challenge mode: at most `2ⁿ − 1 + 5` moves.
-- Recursive solution animation with pause, resume, stop and adjustable delay.
+- Recursive solution animation with pause, resume, stop and adjustable duration.
 - Independent demonstration that preserves the player's game.
 - Persistent JSON scores, multiple games per player and a complete ranking.
 - Console mode requiring no graphical display.
@@ -21,15 +21,20 @@ The current game interface and console prompts are in French.
 
 ## Installation
 
-Requires **Python 3.10+**. The game uses only the standard library; desktop mode requires Tkinter.
+Requires **Python 3.10+**. The engine uses the standard library; desktop mode requires Tkinter and **CustomTkinter** for rounded buttons.
 
 ```bash
 git clone https://github.com/MhamadDeaibess487/Tours-de-Hanoi-Hanoi-towers.git
 cd Tours-de-Hanoi-Hanoi-towers
+python -m venv .venv
+# Linux/macOS
+source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install -e .
 python -m hanoi
 ```
 
-Use `python3` if required by your system. On Debian/Ubuntu, install Tkinter with `sudo apt install python3-tk` if missing. Official Windows Python installers normally include Tcl/Tk; on macOS use a Python distribution with Tkinter support.
+Use `python3` if required by your system. On Debian/Ubuntu, install Tkinter with `sudo apt install python3-tk python3-venv` if missing. Official Windows Python installers normally include Tcl/Tk; on macOS use a Python distribution with Tkinter support.
 
 ```bash
 python -m hanoi --cli
@@ -42,7 +47,7 @@ No account, external service or API key is required.
 
 Move all disks from tower 1 to tower 3. Move one disk at a time, never placing a larger disk on a smaller one.
 
-Choose the disk count and challenge option, then press **Nouvelle partie**. Click a source tower and a destination, or press **1**, **2**, **3**. **Escape** clears the selection. **Annuler** undoes a move; **Solution** starts a demonstration from the initial board; **Pause / reprendre** pauses or resumes it. **Arrêter** restores your own game after a demonstration. Animation delay is measured in milliseconds. **Scores** opens the ranking.
+Choose the disk count and challenge option, then press **Nouvelle partie**. Click a source tower and a destination, or press **1**, **2**, **3**. **Escape** clears the selection. **Annuler** undoes a move; **Solution** starts a demonstration from the initial board; **Pause / reprendre** pauses or resumes it. **Arrêter** restores your own game after a demonstration. Duration is measured in milliseconds per move: lift, slide and lower. Manual moves are animated too. Extra moves are ignored during motion; undo and restart cancel animation safely. **Scores** opens the ranking.
 
 In console mode enter a move such as `1 3`, or use `annuler`, `solution`, `scores`, `nouvelle`, `quitter`. The console solver prints its moves. Victory prompts for a player name and another game.
 

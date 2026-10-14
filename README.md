@@ -13,22 +13,27 @@ Un jeu de réflexion en Python avec une interface de bureau, un mode terminal et
 - Contrôle à la souris ou au clavier, compteur et détection de victoire.
 - Annulation successive des déplacements.
 - Mode libre et mode défi : au maximum `2ⁿ − 1 + 5` coups.
-- Solution récursive animée avec pause, reprise, arrêt et réglage du délai.
+- Solution récursive animée avec pause, reprise, arrêt et réglage de la durée.
 - Démonstration indépendante : votre partie reste intacte.
 - Scores persistants en JSON, plusieurs parties par joueur et classement complet.
 - Mode terminal utilisable sans affichage graphique.
 
 ## Installation et lancement
 
-Python **3.10 ou plus récent** est nécessaire. Le jeu utilise uniquement la bibliothèque standard ; Tkinter est nécessaire pour l'interface graphique.
+Python **3.10 ou plus récent** est nécessaire. Le moteur utilise la bibliothèque standard ; l’interface graphique utilise Tkinter et **CustomTkinter** (boutons arrondis).
 
 ```bash
 git clone https://github.com/MhamadDeaibess487/Tours-de-Hanoi-Hanoi-towers.git
 cd Tours-de-Hanoi-Hanoi-towers
+python -m venv .venv
+# Linux/macOS
+source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install -e .
 python -m hanoi
 ```
 
-Selon votre système, la commande Python peut être `python3`. Sur Debian/Ubuntu, installez Tkinter si nécessaire avec `sudo apt install python3-tk`. Les installations officielles de Python pour Windows incluent normalement Tcl/Tk ; sur macOS, utilisez une distribution proposant Tkinter.
+Selon votre système, la commande Python peut être `python3`. Sur Debian/Ubuntu, installez Tkinter si nécessaire avec `sudo apt install python3-tk python3-venv`. Les installations officielles de Python pour Windows incluent normalement Tcl/Tk ; sur macOS, utilisez une distribution proposant Tkinter.
 
 Autres points d'entrée :
 
@@ -43,7 +48,7 @@ Aucun compte, service externe ou clé API n'est nécessaire.
 
 Déplacez tous les disques de la tour 1 vers la tour 3. Un déplacement porte sur un seul disque, et un grand disque ne peut jamais être posé sur un plus petit.
 
-Dans l'interface graphique, choisissez le nombre de disques et le mode, puis cliquez sur **Nouvelle partie**. Cliquez sur une tour source puis une destination, ou utilisez les touches **1**, **2**, **3**. **Échap** désélectionne la tour. Les boutons permettent d'annuler, consulter les scores ou lancer une démonstration depuis le plateau initial. Après la démonstration, **Arrêter** restaure l'affichage de votre partie. Le délai d'animation est exprimé en millisecondes.
+Dans l'interface graphique, choisissez le nombre de disques et le mode, puis cliquez sur **Nouvelle partie**. Cliquez sur une tour source puis une destination, ou utilisez les touches **1**, **2**, **3**. **Échap** désélectionne la tour. Les boutons permettent d'annuler, consulter les scores ou lancer une démonstration depuis le plateau initial. Après la démonstration, **Arrêter** restaure l'affichage de votre partie. Le réglage de durée (en millisecondes) contrôle chaque déplacement : montée, glissement, puis descente. Les mouvements manuels sont également animés. Les clics supplémentaires sont ignorés pendant un déplacement ; annuler ou commencer une nouvelle partie interrompt l’animation proprement.
 
 Dans le terminal, saisissez par exemple `1 3`. Les commandes sont `annuler`, `solution`, `scores`, `nouvelle` et `quitter`. La solution y est affichée sous forme de déplacements. Une victoire propose l'enregistrement du score et une nouvelle partie.
 

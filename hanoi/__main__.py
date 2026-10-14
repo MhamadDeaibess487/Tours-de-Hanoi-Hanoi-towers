@@ -18,7 +18,10 @@ def main():
     except (KeyboardInterrupt, EOFError):
         print("\nAu revoir !")
     except ImportError as error:
-        print(f"Tkinter indisponible : {error}. Installez python3-tk ou utilisez --cli.", file=sys.stderr)
+        print(
+            f"Dépendance graphique indisponible : {error}. Installez le projet avec pip install -e . et python3-tk, ou utilisez --cli.",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

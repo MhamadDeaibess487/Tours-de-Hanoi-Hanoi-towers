@@ -1,6 +1,7 @@
 """Event-driven Tkinter interface with a scalable Canvas."""
 
 import tkinter as tk
+import customtkinter as ctk
 from tkinter import ttk, simpledialog
 from .game import Game
 from .scores import ScoreStore
@@ -15,12 +16,15 @@ class App:
         self.game = Game()
         self.selected = None
         self.job = None
+        self.move_job = None
+        self.moving = None
         self.animation = None
         self.demo = None
         self.paused = False
         self.recorded = False
         root.title("Tours de Hanoï")
         apply_dark_theme(root)
+        ctk.set_appearance_mode("dark")
         root.geometry("1000x650")
         root.minsize(700, 450)
         root.protocol("WM_DELETE_WINDOW", self.close)
@@ -45,12 +49,7 @@ class App:
             ("Arrêter", self.stop),
             ("Scores", self.scores),
         ]:
-            ttk.Button(
-                tools,
-                text=text,
-                command=command,
-                style="Primary.TButton" if text == "Nouvelle partie" else "TButton",
-            ).pack(side="left", padx=3)
+            self.button(tools, text, command, primary=text == "Nouvelle partie").pack(side="left", padx=3)
         ttk.Label(root, textvariable=self.counter, padding=10, style="Counter.TLabel").pack()
         self.canvas = tk.Canvas(root, background="#101827", highlightthickness=0)
         self.canvas.pack(fill="both", expand=True, padx=12)
@@ -62,7 +61,7 @@ class App:
         footer = ttk.Frame(root, padding=12)
         footer.pack(fill="x")
         ttk.Label(footer, textvariable=self.status).pack(side="left")
-        ttk.Label(footer, text="Délai (ms)").pack(side="right")
+        ttk.Label(footer, text="Durée (ms)").pack(side="right")
         ttk.Scale(footer, from_=50, to=1000, variable=self.delay).pack(side="right")
         ttk.Label(
             root,
@@ -82,7 +81,7 @@ class App:
         except ValueError as error:
             self.status.set(str(error))
             return
-        self.stop()
+        self.stop(notify=False)
         self.game = game
         self.recorded = False
         self.selected = None
@@ -97,6 +96,9 @@ class App:
         # Ignore number keys while typing the disk count.
         if isinstance(self.root.focus_get(), (ttk.Spinbox, ttk.Entry)):
             return
+        if self.moving is not None:
+            self.status.set("Attendez la fin du déplacement.")
+            return
         if self.demo is not None:
             self.status.set("Arrêtez la démonstration pour reprendre votre partie.")
             return
@@ -110,30 +112,29 @@ class App:
             source = self.selected
             self.selected = None
             try:
-                self.game.move(source, tower)
-                self.status.set("Coup joué. Choisissez la prochaine tour de départ.")
+                self.animate_move(self.game, source, tower, self.after_player_move)
             except ValueError as error:
                 self.status.set(str(error))
-            self.draw()
-            if self.game.won:
-                self.status.set(f"Victoire en {self.game.moves} coups !")
-                if not self.recorded:
-                    name = simpledialog.askstring(
-                        "Victoire !", "Votre nom pour enregistrer le score :", parent=self.root
-                    )
-                    if name is not None:
-                        try:
-                            self.store.add(name, self.game)
-                            self.recorded = True
-                        except (ValueError, OSError) as error:
-                            self.show_error("Score non enregistré", str(error))
-            elif self.game.exhausted:
-                self.status.set("Limite du défi atteinte. Annulez ou commencez une nouvelle partie.")
+        self.draw()
+
+    def after_player_move(self):
+        self.status.set("Coup joué. Choisissez la prochaine tour de départ.")
+        if self.game.won:
+            self.status.set(f"Victoire en {self.game.moves} coups !")
+            if not self.recorded:
+                name = simpledialog.askstring("Victoire !", "Votre nom pour enregistrer le score :", parent=self.root)
+                if name is not None:
+                    try:
+                        self.store.add(name, self.game)
+                        self.recorded = True
+                    except (ValueError, OSError) as error:
+                        self.show_error("Score non enregistré", str(error))
+        elif self.game.exhausted:
+            self.status.set("Limite du défi atteinte. Annulez ou commencez une nouvelle partie.")
         self.draw()
 
     def undo(self):
-        if self.demo is not None:
-            self.stop()
+        self.stop(notify=False)
         try:
             self.game.undo()
             self.status.set("Dernier coup annulé.")
@@ -143,7 +144,7 @@ class App:
         self.draw()
 
     def start_solution(self):
-        self.stop()
+        self.stop(notify=False)
         self.demo = Game(self.game.disks)
         self.animation = iter(solve(self.game.disks))
         self.selected = None
@@ -159,9 +160,41 @@ class App:
         except StopIteration:
             self.status.set("Solution terminée. « Arrêter » restaure votre partie.")
             return
-        self.demo.move(source, target)
+        self.animate_move(self.demo, source, target, self.next_solution_move)
+
+    def next_solution_move(self):
+        if self.demo is not None and not self.paused:
+            self.job = self.root.after(50, self.step)
+
+    def animate_move(self, game, source, target, complete):
+        source_level = len(game.towers[source]) - 1
+        game.move(source, target)
+        self.moving = dict(
+            disk=game.towers[target][-1],
+            source=source,
+            target=target,
+            source_level=source_level,
+            target_level=len(game.towers[target]) - 1,
+            progress=0.0,
+            duration=max(50, int(self.delay.get())),
+            complete=complete,
+        )
         self.draw()
-        self.job = self.root.after(max(50, int(self.delay.get())), self.step)
+        self.move_job = self.root.after(16, self.tick_move)
+
+    def tick_move(self):
+        self.move_job = None
+        if self.moving is None or self.paused:
+            return
+        self.moving["progress"] = min(1.0, self.moving["progress"] + 16 / self.moving["duration"])
+        if self.moving["progress"] >= 1:
+            complete = self.moving["complete"]
+            self.moving = None
+            self.draw()
+            complete()
+        else:
+            self.draw()
+            self.move_job = self.root.after(16, self.tick_move)
 
     def pause(self):
         if self.demo is None:
@@ -171,20 +204,34 @@ class App:
             if self.job:
                 self.root.after_cancel(self.job)
                 self.job = None
+            if self.move_job:
+                self.root.after_cancel(self.move_job)
+                self.move_job = None
             self.status.set("Démonstration en pause.")
         else:
             self.status.set("Démonstration en cours.")
-            self.step()
+            if self.moving is not None:
+                self.move_job = self.root.after(16, self.tick_move)
+            else:
+                self.step()
 
-    def stop(self):
+    def stop(self, notify=True):
+        complete = self.moving["complete"] if notify and self.moving and self.demo is None else None
+        if self.move_job:
+            self.root.after_cancel(self.move_job)
+        self.move_job = None
+        self.moving = None
         if self.job:
             self.root.after_cancel(self.job)
         self.job = None
         self.demo = None
         self.animation = None
         self.paused = False
+        self.selected = None
         self.status.set("Votre partie est conservée. Choisissez une tour.")
         self.draw()
+        if complete:
+            complete()
 
     def draw(self):
         self.canvas.delete("all")
@@ -206,7 +253,7 @@ class App:
         ]
         for tower, stack in enumerate(game.towers):
             center = cell * (tower + 0.5)
-            self.canvas.create_rectangle(center - 5, 30, center + 5, baseline, fill="#64748b", outline="")
+            self.canvas.create_rectangle(center - 5, 55, center + 5, baseline, fill="#64748b", outline="")
             self.canvas.create_rectangle(
                 center - cell * 0.43,
                 baseline,
@@ -219,6 +266,8 @@ class App:
                 center, baseline + 25, text=f"Tour {tower + 1}", fill="#f8fafc", font=("TkDefaultFont", 12)
             )
             for level, disk in enumerate(stack):
+                if self.moving is not None and disk == self.moving["disk"]:
+                    continue
                 half = cell * (0.12 + 0.29 * disk / game.disks)
                 bottom = baseline - level * disk_height
                 self.canvas.create_rectangle(
@@ -230,6 +279,25 @@ class App:
                     outline="#101827",
                 )
                 self.canvas.create_text(center, bottom - disk_height / 2, text=str(disk), fill="#101827")
+        if self.moving is not None:
+            move = self.moving
+            start_x = cell * (move["source"] + 0.5)
+            end_x = cell * (move["target"] + 0.5)
+            start_y = baseline - move["source_level"] * disk_height
+            end_y = baseline - move["target_level"] * disk_height
+            points = [(start_x, start_y), (start_x, 35), (end_x, 35), (end_x, end_y)]
+            progress = min(move["progress"] * 3, 2.999999)
+            stage = int(progress)
+            t = progress - stage
+            t = t * t * (3 - 2 * t)  # Smooth easing within each segment.
+            x = points[stage][0] + (points[stage + 1][0] - points[stage][0]) * t
+            y = points[stage][1] + (points[stage + 1][1] - points[stage][1]) * t
+            disk = move["disk"]
+            half = cell * (0.12 + 0.29 * disk / game.disks)
+            self.canvas.create_rectangle(
+                x - half, y - disk_height + 2, x + half, y - 1, fill=colors[disk - 1], outline="#101827", tags="moving"
+            )
+            self.canvas.create_text(x, y - disk_height / 2, text=str(disk), fill="#101827", tags="moving")
         prefix = "Solution · " if self.demo is not None else ""
         limit = f" · limite : {game.minimum + 5}" if game.challenge else ""
         self.counter.set(f"{prefix}{game.moves} coups · minimum : {game.minimum}{limit}")
@@ -283,12 +351,33 @@ class App:
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text=title, foreground="#fda4af", font=("TkDefaultFont", 12, "bold")).pack(anchor="w")
         ttk.Label(frame, text=message, wraplength=450).pack(anchor="w", pady=12)
-        button = ttk.Button(frame, text="Fermer", command=window.destroy)
+        button = self.button(frame, "Fermer", window.destroy)
         button.pack(anchor="e")
         button.focus_set()
         window.bind("<Escape>", lambda event: window.destroy())
 
+    def button(self, parent, text, command, primary=False):
+        button = ctk.CTkButton(
+            parent,
+            text=text,
+            command=command,
+            corner_radius=12,
+            width=110,
+            height=38,
+            bg_color=BACKGROUND,
+            fg_color="#0369a1" if primary else SURFACE,
+            hover_color="#0284c7" if primary else "#334155",
+            text_color="#f1f5f9",
+            border_width=1,
+            border_color="#475569",
+        )
+        button.bind("<Return>", lambda event: command())
+        button.bind("<space>", lambda event: command())
+        return button
+
     def close(self):
+        if self.move_job:
+            self.root.after_cancel(self.move_job)
         if self.job:
             self.root.after_cancel(self.job)
         self.root.destroy()

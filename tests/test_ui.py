@@ -8,6 +8,26 @@ from hanoi.scores import ScoreStore
 pytestmark = pytest.mark.skipif(not os.environ.get("DISPLAY"), reason="An X display is required")
 
 
+def finish_move(root, app):
+    timed_out = []
+
+    def check():
+        if app.moving is None:
+            root.quit()
+        else:
+            root.after(10, check)
+
+    def timeout():
+        timed_out.append(True)
+        root.quit()
+
+    root.after(10, check)
+    deadline = root.after(2000, timeout)
+    root.mainloop()
+    root.after_cancel(deadline)
+    assert not timed_out
+
+
 def test_graphical_game_and_animation(tmp_path):
     root = tk.Tk()
     app = App(root, ScoreStore(tmp_path / "scores.json"))
@@ -20,11 +40,15 @@ def test_graphical_game_and_animation(tmp_path):
         app.new()
         app.choose(0)
         app.choose(1)
+        assert app.moving is not None
+        app.choose(2)
+        assert app.game.moves == 1
         app.undo()
         assert app.game.moves == 0
         with patch("hanoi.ui.simpledialog.askstring", return_value="Graphical player"):
             app.choose(0)
             app.choose(2)
+            finish_move(root, app)
         assert app.game.won and len(app.store.load()) == 1
         app.start_solution()
         assert app.demo.won
@@ -51,12 +75,15 @@ def test_animation_event_loop_preserves_player_game(tmp_path):
         app.delay.set(50)
         app.start_solution()
         app.pause()
-        assert app.demo.moves == 1 and app.job is None
+        assert app.demo.moves == 1 and app.job is None and app.move_job is None
+        frozen = app.moving["progress"]
+        root.update()
+        assert app.moving["progress"] == frozen
         app.pause()
         timed_out = []
 
         def check():
-            if app.demo.won:
+            if app.demo.won and app.moving is None:
                 root.quit()
             else:
                 root.after(10, check)
@@ -72,7 +99,36 @@ def test_animation_event_loop_preserves_player_game(tmp_path):
         assert not timed_out
         assert app.demo.won and app.demo.moves == 7
         app.stop()
+        assert app.move_job is None
         assert app.game.towers == before and app.game.moves == 1
         assert app.store.load() == []
+    finally:
+        app.close()
+
+
+def test_restart_and_stop_during_motion(tmp_path):
+    root = tk.Tk()
+    app = App(root, ScoreStore(tmp_path / "scores.json"))
+    root.update()
+    try:
+        app.choose(0)
+        app.choose(1)
+        assert app.canvas.find_withtag("moving")
+        root.geometry("800x500")
+        root.update()
+        app.new()
+        assert app.moving is None and app.move_job is None and app.game.moves == 0
+        app.start_solution()
+        app.pause()
+        app.stop()
+        assert app.demo is None and app.moving is None and app.move_job is None
+        app.disks.set("1")
+        app.new()
+        with patch("hanoi.ui.simpledialog.askstring", return_value="Stopped animation"):
+            app.choose(0)
+            app.choose(2)
+            app.stop()
+        assert app.game.won and len(app.store.load()) == 1
+        assert app.move_job is None
     finally:
         app.close()
