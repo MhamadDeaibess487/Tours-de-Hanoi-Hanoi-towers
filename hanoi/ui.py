@@ -1,5 +1,6 @@
 """Event-driven Tkinter interface with a scalable Canvas."""
 
+from time import perf_counter
 import tkinter as tk
 import customtkinter as ctk
 from tkinter import ttk, simpledialog
@@ -176,6 +177,8 @@ class App:
             source_level=source_level,
             target_level=len(game.towers[target]) - 1,
             progress=0.0,
+            elapsed=0.0,
+            last_tick=perf_counter(),
             duration=max(50, int(self.delay.get())),
             complete=complete,
         )
@@ -186,14 +189,17 @@ class App:
         self.move_job = None
         if self.moving is None or self.paused:
             return
-        self.moving["progress"] = min(1.0, self.moving["progress"] + 16 / self.moving["duration"])
+        now = perf_counter()
+        self.moving["elapsed"] += now - self.moving["last_tick"]
+        self.moving["last_tick"] = now
+        self.moving["progress"] = min(1.0, self.moving["elapsed"] * 1000 / self.moving["duration"])
         if self.moving["progress"] >= 1:
             complete = self.moving["complete"]
             self.moving = None
             self.draw()
             complete()
         else:
-            self.draw()
+            self.update_moving_disk()
             self.move_job = self.root.after(16, self.tick_move)
 
     def pause(self):
@@ -211,6 +217,7 @@ class App:
         else:
             self.status.set("Démonstration en cours.")
             if self.moving is not None:
+                self.moving["last_tick"] = perf_counter()
                 self.move_job = self.root.after(16, self.tick_move)
             else:
                 self.step()
@@ -280,27 +287,44 @@ class App:
                 )
                 self.canvas.create_text(center, bottom - disk_height / 2, text=str(disk), fill="#101827")
         if self.moving is not None:
-            move = self.moving
-            start_x = cell * (move["source"] + 0.5)
-            end_x = cell * (move["target"] + 0.5)
-            start_y = baseline - move["source_level"] * disk_height
-            end_y = baseline - move["target_level"] * disk_height
-            points = [(start_x, start_y), (start_x, 35), (end_x, 35), (end_x, end_y)]
-            progress = min(move["progress"] * 3, 2.999999)
-            stage = int(progress)
-            t = progress - stage
-            t = t * t * (3 - 2 * t)  # Smooth easing within each segment.
-            x = points[stage][0] + (points[stage + 1][0] - points[stage][0]) * t
-            y = points[stage][1] + (points[stage + 1][1] - points[stage][1]) * t
-            disk = move["disk"]
-            half = cell * (0.12 + 0.29 * disk / game.disks)
+            disk = self.moving["disk"]
             self.canvas.create_rectangle(
-                x - half, y - disk_height + 2, x + half, y - 1, fill=colors[disk - 1], outline="#101827", tags="moving"
+                0, 0, 0, 0, fill=colors[disk - 1], outline="#101827", tags=("moving", "moving_shape")
             )
-            self.canvas.create_text(x, y - disk_height / 2, text=str(disk), fill="#101827", tags="moving")
+            self.canvas.create_text(0, 0, text=str(disk), fill="#101827", tags=("moving", "moving_label"))
+            self.update_moving_disk()
         prefix = "Solution · " if self.demo is not None else ""
         limit = f" · limite : {game.minimum + 5}" if game.challenge else ""
         self.counter.set(f"{prefix}{game.moves} coups · minimum : {game.minimum}{limit}")
+
+    def update_moving_disk(self):
+        """Move existing Canvas items; stationary objects are not redrawn per frame."""
+        if self.moving is None:
+            return
+        game = self.demo if self.demo is not None else self.game
+        move = self.moving
+        cell = max(1, self.canvas.winfo_width()) / 3
+        height = max(1, self.canvas.winfo_height())
+        baseline = height - 45
+        disk_height = min(28, (height - 95) / (game.disks + 1))
+        start_x, end_x = cell * (move["source"] + 0.5), cell * (move["target"] + 0.5)
+        start_y = baseline - move["source_level"] * disk_height
+        end_y = baseline - move["target_level"] * disk_height
+        points = [(start_x, start_y), (start_x, 35), (end_x, 35), (end_x, end_y)]
+        lengths = [abs(b[0] - a[0]) + abs(b[1] - a[1]) for a, b in zip(points, points[1:])]
+        progress = move["progress"]
+        # Ease once over the whole route, rather than stopping at every corner.
+        distance = sum(lengths) * progress * progress * (3 - 2 * progress)
+        x, y = points[-1]
+        for a, b, length in zip(points, points[1:], lengths):
+            if distance <= length and length:
+                ratio = distance / length
+                x, y = a[0] + (b[0] - a[0]) * ratio, a[1] + (b[1] - a[1]) * ratio
+                break
+            distance -= length
+        half = cell * (0.12 + 0.29 * move["disk"] / game.disks)
+        self.canvas.coords("moving_shape", x - half, y - disk_height + 2, x + half, y - 1)
+        self.canvas.coords("moving_label", x, y - disk_height / 2)
 
     def scores(self):
         try:

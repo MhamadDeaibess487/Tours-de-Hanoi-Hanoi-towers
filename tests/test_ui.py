@@ -132,3 +132,29 @@ def test_restart_and_stop_during_motion(tmp_path):
         assert app.move_job is None
     finally:
         app.close()
+
+
+def test_delayed_frame_uses_elapsed_time_without_redrawing_board(tmp_path):
+    root = tk.Tk()
+    app = App(root, ScoreStore(tmp_path / "scores.json"))
+    root.update()
+    try:
+        app.delay.set(1000)
+        with patch("hanoi.ui.perf_counter", return_value=10.0):
+            app.choose(0)
+            app.choose(1)
+        initial_items = app.canvas.find_all()
+        initial_position = app.canvas.coords("moving_shape")
+        root.after_cancel(app.move_job)
+        with patch("hanoi.ui.perf_counter", return_value=10.5):
+            app.tick_move()
+        assert app.moving["progress"] == 0.5
+        assert app.canvas.find_all() == initial_items
+        assert app.canvas.coords("moving_shape") != initial_position
+        root.after_cancel(app.move_job)
+        with patch("hanoi.ui.perf_counter", return_value=11.1):
+            app.tick_move()
+        assert app.moving is None and app.move_job is None
+        assert app.game.moves == 1
+    finally:
+        app.close()
